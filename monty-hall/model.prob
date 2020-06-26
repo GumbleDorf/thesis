@@ -1,78 +1,94 @@
 %The following problog program models the monty hall problem in a way that incorporates some GDL-III concepts
 role(1). role(0).
 
-%The following 3 predicates are public knowledge at
+%The following 3 predicates are public knowledge at step 1
 init(step(1)). 
 init(closed(door(1))). 
 init(closed(door(2))).
 init(closed(door(3))).
 
-%Candidate thinks of every possible car placement
-1/P::update(knows(1,car(door(X)))) :-
-    not knows(1, step(2)),
-    not knows(1, step(3)),
-    not knows(1, step(4)),
-    knows(1,step(1)),
-    knows(1, closed(door(X))),
-    findall(Y,legal(0, hide_car(door(Y))),Doors),
-    length(Doors,P), 
+%Chance that legal move (X,Y,Z) will be taken according to player R based on their knowledge
+1/P::knows(R, step(T), does(X,Y)) :-
+    role(R),
+    knows(R, step(T), legal(X,Y)),
+    findall(A,knows(R, step(T), legal(X, A)),Possibilities),
+    length(Possibilities,P), 
     P > 0.
 
-%Steps: probability of making a move
-update(knows(1, car(door(X)))) :- knows(1, car(door(X))).
+future(step(X)) :- not ptrue(step(X)).
 
-1/P::update(knows(1,legal(0,open_door(door(X))))) :-
-    knows(1,step(2)),
-    not knows(1, step(3)),
-    not knows(1, step(4)),
-    knows(1,closed(door(X))),
-    not knows(1, car(door(X))),
-    not does(1,choose(door(X))),
-    findall(Y,possible_open_door(Y),Doors),
-    length(Doors,P), 
-    P > 0.
+%Legal(player, action, args)
+legal(0, hide_car(door(X))) :- ptrue(step(1)),ptrue(closed(door(X))).
+knows(R, step(1), legal(0, hide_car(door(X)))) :- role(R), future(step(1)), knows(R, step(1), closed(door(X))).
 
-possible_open_door(X) :-
-    knows(1,step(2)), knows(1,closed(door(X))),not knows(1,car(door(X))),not does(1,choose(door(X))).
+legal(0, open_door(door(X))) :- ptrue(step(2)),ptrue(closed(door(X))),not ptrue(car(door(X))),not ptrue(chosen(door(X))).
+knows(R, step(2), legal(0, open_door(door(X)))) :- 
+    role(R), 
+    future(step(2)), 
+    knows(R, step(2), closed(door(X))),
+    not knows(R, step(2), car(door(X))),
+    not knows(R, step(2), chosen(door(X))).
 
-% A correct prediction rule
-correct(knows(1,legal(0,open_door(door(X))))) :- does(0, open_door(door(X))), ptrue(step(2)).
-
-update(knows(1, closed(door(X)))) :-
-    not does(0, open_door(door(X))), knows(1, closed(door(X))).
-
-sees(1, chosen(door(X))) :- does(1, choose(door(X))).
-sees(1, not car(door(X))) :- does(0,open_door(door(X))).
-sees(1, not closed(door(X))) :- does(0,open_door(door(X))).
-
-
-legal(0,hide_car(door(X))) :- ptrue(step(1)),ptrue(closed(door(X))).
-legal(0,open_door(door(X))) :- ptrue(step(2)),ptrue(closed(door(X))),not ptrue(car(door(X))),not ptrue(chosen(door(X))).
-legal(0,noop) :- ptrue(step(3)).
+legal(0, noop) :- ptrue(step(3)).
+knows(R, step(3), legal(0, noop)) :- role(R), future(step(3)).
 
 legal(1,choose(door(X))) :- ptrue(step(1)),ptrue(closed(door(X))).
-legal(1,noop) :- ptrue(step(2)).
-legal(1,noop) :- ptrue(step(3)).
-legal(1,switch) :- ptrue(step(3)).
+knows(R, step(1), legal(1, choose(door(X)))) :- role(R), future(step(1)), knows(R, step(1), closed(door(X))).
 
-%Sees are only applicable the turn after they are ptrue, after which point they become known by player X
+legal(1, noop) :- ptrue(step(2)).
+knows(R, step(2), legal(1, noop)) :- role(R), future(step(2)).
+
+legal(1, noop) :- ptrue(step(3)).
+knows(R, step(3), legal(1, noop)) :- role(R), future(step(3)).
+
+legal(1,switch) :- ptrue(step(3)).
+knows(R, step(3), legal(1,switch)) :- role(R), future(step(3)).
+
+%Sees acts as an override to the knows predicate
 sees(1,not car(door(X))) :- does(0,open_door(door(X))).
 sees(1,car(door(X))) :- ptrue(step(3)), ptrue(car(door(X))).
 
+%This is derivable by just taking the min and max of the steps
+zucc(Y,X) :- between(1,4,X), Y is X-1.
+
+
 next(car(door(X))) :- does(0,hide_car(door(X))).
+knows(R, step(Y), car(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), does(0,hide_car(door(Z)))).
+
 next(car(door(X))) :- ptrue(car(door(X))).
+knows(R, step(Y), car(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), car(door(Z))).
+
 next(closed(door(X))) :- ptrue(closed(door(X))),not does(0,open_door(door(X))).
+knows(R, step(Y), closed(door(Z))) :- role(R), zucc(X,Y),knows(R, step(X), closed(door(Z))), not knows(R, step(X), does(0,open_door(door(Z)))).
+
 next(chosen(door(X))) :- does(1,choose(door(X))).
+knows(R, step(Y), chosen(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), does(1,choose(door(Z)))).
+
+
 next(chosen(door(X))) :- ptrue(chosen(door(X))),not does(1,switch).
+knows(R, step(Y), chosen(door(X))) :- role(R), zucc(X,Y), knows(R, step(X), chosen(door(X))),not knows(R, step(X), does(1,switch)).
+
 next(chosen(door(X))) :- does(1,switch),ptrue(closed(door(X))),not ptrue(chosen(door(X))).
+knows(R, step(Y), chosen(door(X))) :- role(R), zucc(X,Y), knows(R, step(X), does(1,switch)),knows(R, step(X), closed(door(X))),not knows(R, step(X), chosen(door(X))).
+
+
 next(step(2)) :- ptrue(step(1)).
+knows(R, step(Y), step(2)) :- zucc(X,Y), role(R), knows(R, step(X), step(1)).
+
 next(step(3)) :- ptrue(step(2)).
+knows(R, step(Y), step(3)) :- zucc(X,Y), role(R), knows(R, step(X), step(2)).
+
 next(step(4)) :- ptrue(step(3)).
+knows(R, step(Y), step(4)) :- zucc(X,Y), role(R), knows(R, step(X), step(3)).
 
 terminal :- ptrue(step(4)).
+knows(R, step(X), terminal) :- knows(R, step(X), step(4)), role(R).
 
 goal(1,100) :- ptrue(chosen(door(X))), ptrue(car(door(X))).
+knows(R, step(X), goal(1,100)) :- role(R), knows(R, step(X), step(X)), knows(R,step(X), car(door(X))), knows(R,step(X), chosen(door(X))).
+
 goal(1, 0) :- ptrue(chosen(door(X))), not ptrue(car(door(X))).
+knows(R, step(X), goal(1,0)) :- role(R), knows(R, step(X), step(X)), not knows(R,step(X), car(door(X))), knows(R,step(X), chosen(door(X))).
+
 goal(0,0).
-
-
+knows(R, step(X), goal(0,0)) :- role(R), knows(R,step(X), step(X)).

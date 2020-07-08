@@ -1,15 +1,15 @@
 role(1).
 role(0).
 
-ppnumber(X) :- between(1,32,X).
+pnumber(X) :- between(1,32,X).
 zucc(X,Y) :- between(0,31,X),Y is X+1.
 
 less(X,Y) :- zucc(X,Y).
 less(X,Y) :- zucc(X,Z), less(Z, Y).
-init(step(0)).
+init(step(1)).
 
 %Chance that legal move (X,Y,Z) will be taken according to player R based on their knowledge
-1/P::knows(R, step(T), does(X,Y)) :-
+1/P::knowsMove(R, step(T), does(X,Y)) :-
     role(R),
     knows(R, step(T), legal(X,Y)),
     findall(A,knows(R, step(T), legal(X, A)),Possibilities),
@@ -30,17 +30,15 @@ knows(R, step(X), legal(1,noop)) :- role(R), knows(R, step(X), ptrue(0)).
 legal(1, ask_if_less(X)) :- pnumber(X), not ptrue(step(0)).
 knows(R, step(X), legal(1, ask_if_less(N))) :- role(R), knows(R, step(X), pnumber(N)), not knows(R, step(X), step(0)).
 
-%I'm going two one more dual definition here as I believe it is required to model this fully
-secret_bounds(N,M) :- secret(N), less(N,M).
-knows(R, step(X), secret_bounds(N,M)) :- role(R), knows(R, step(X), secret_less(M)), knows(R, step(X), secret(N)), less(N,M).
 
-sees(1,secret_less(N)) :- does(1,ask_if_less(N)), ptrue(secret(M)), less(M,N).
+sees(1, guess(N)) :- does(1,ask_if_less(N)), ptrue(secret(M)), less(M,N).
+sees(1, guess(N)) :- knows(1, step(Y), does(1,ask_if_less(N))), knows(1, step(Y), secret(M)), less(M,N).
 
 next(secret(N)) :- does(0, choose(N)).
 knows(R, step(Y), secret(N)) :- role(R),zucc(X,Y), knows(R, step(X), does(0, choose(N))).
 
 next(secret(N)) :- ptrue(secret(N)).
-knows(R, step(Y), secret(N)) :- role(R),zucc(X,Y), knows(R, step(X), does(0, secret(N))).
+knows(R, step(Y), secret(N)) :- role(R),zucc(X,Y), knows(R, step(X), does(0, choose(N))).
 
 next(step(N)) :- ptrue(step(M)), zucc(M,N).
 knows(R, step(Y), step(Y)) :- role(R),zucc(X,Y), knows(R, step(X), step(X)).
@@ -48,12 +46,12 @@ knows(R, step(Y), step(Y)) :- role(R),zucc(X,Y), knows(R, step(X), step(X)).
 num(N) :- ptrue(secret(N)).
 knows(R, step(X), num(N)) :- role(R), knows(R, step(X), secret(N)).
 
-%Since knows is in the right hand side, we don't need a dual definition here
-knows_the_pnumber(R) :- role(R), knows(R, step(X), num(N)).
+%For pre-existing knows predicates, only true if every other world also has this knowledge
+ptrue(knows_the_pnumber(R)) :- role(R), ptrue(knows(R, step(X), num(N))).
 
-terminal :- knows_the_pnumber(1).
+terminal :- ptrue(knows_the_pnumber(1)).
 terminal :- ptrue(step(12)).
 
-goal(1, 100) :- knows_the_pnumber(1).
+goal(1, 100) :- ptrue(knows_the_pnumber(1)).
 
-goal(0,100) :- not knows_the_pnumber(1).
+goal(0,100) :- not ptrue(knows_the_pnumber(1)).

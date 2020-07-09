@@ -6,7 +6,7 @@ zucc(X,Y) :- between(0,31,X),Y is X+1.
 
 less(X,Y) :- zucc(X,Y).
 less(X,Y) :- zucc(X,Z), less(Z, Y).
-init(step(1)).
+init(step(0)).
 
 %Chance that legal move (X,Y,Z) will be taken according to player R based on their knowledge
 1/P::knowsMove(R, step(T), does(X,Y)) :-
@@ -19,26 +19,25 @@ init(step(1)).
 future(step(X)) :- not ptrue(step(X)).
 
 legal(0, choose(X)) :- pnumber(X), ptrue(step(0)).
-knows(R, step(X), legal(0,choose(X))) :- role(R), knows(R, step(0), pnumber(X)), knows(R, step(X), step(0)).
+knows(R, step(X), legal(0,choose(N))) :- role(R), pnumber(N), knows(R, step(X), step(0)).
 
 legal(0, noop) :- not ptrue(step(0)).
-knows(R, step(X), legal(0,noop)) :- role(R), not knows(R, step(X), ptrue(0)).
+knows(R, step(X), legal(0,noop)) :- role(R), not knows(R, step(X), step(0)).
 
 legal(1, noop) :- ptrue(step(0)).
-knows(R, step(X), legal(1,noop)) :- role(R), knows(R, step(X), ptrue(0)).
+knows(R, step(X), legal(1,noop)) :- role(R), knows(R, step(X), step(0)).
 
 legal(1, ask_if_less(X)) :- pnumber(X), not ptrue(step(0)).
-knows(R, step(X), legal(1, ask_if_less(N))) :- role(R), knows(R, step(X), pnumber(N)), not knows(R, step(X), step(0)).
-
+knows(R, step(X), legal(1, ask_if_less(N))) :- role(R), pnumber(N), not knows(R, step(X), step(0)).
 
 sees(1, guess(N)) :- does(1,ask_if_less(N)), ptrue(secret(M)), less(M,N).
-sees(1, guess(N)) :- knows(1, step(Y), does(1,ask_if_less(N))), knows(1, step(Y), secret(M)), less(M,N).
+knows(1, step(Y), sees(1, guess(N))) :- knows(1, step(Y), does(1,ask_if_less(N))), knows(1, step(Y), secret(M)), less(M,N).
 
 next(secret(N)) :- does(0, choose(N)).
 knows(R, step(Y), secret(N)) :- role(R),zucc(X,Y), knows(R, step(X), does(0, choose(N))).
 
 next(secret(N)) :- ptrue(secret(N)).
-knows(R, step(Y), secret(N)) :- role(R),zucc(X,Y), knows(R, step(X), does(0, choose(N))).
+knows(R, step(Y), secret(N)) :- role(R),zucc(X,Y), knows(R, step(X), secret(N)).
 
 next(step(N)) :- ptrue(step(M)), zucc(M,N).
 knows(R, step(Y), step(Y)) :- role(R),zucc(X,Y), knows(R, step(X), step(X)).
@@ -47,11 +46,11 @@ num(N) :- ptrue(secret(N)).
 knows(R, step(X), num(N)) :- role(R), knows(R, step(X), secret(N)).
 
 %For pre-existing knows predicates, only true if every other world also has this knowledge
-ptrue(knows_the_pnumber(R)) :- role(R), ptrue(knows(R, step(X), num(N))).
+knows_the_pnumber(R) :- role(R), pknows(R, step(X), num(N)).
 
-terminal :- ptrue(knows_the_pnumber(1)).
+terminal :- knows_the_pnumber(1).
 terminal :- ptrue(step(12)).
 
-goal(1, 100) :- ptrue(knows_the_pnumber(1)).
+goal(1, 100) :- knows_the_pnumber(1).
 
-goal(0,100) :- not ptrue(knows_the_pnumber(1)).
+goal(0,100) :- knows_the_pnumber(1).

@@ -1,0 +1,3 @@
+number
+succ
+true

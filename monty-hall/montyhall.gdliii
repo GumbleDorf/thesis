@@ -1,6 +1,9 @@
-role(candidate). role(random).
+role(candidate). 
+role(random).
 
-init(closed(1)). init(closed(2)). init(closed(3)).
+init(closed(1)). 
+init(closed(2)). 
+init(closed(3)).
 init(step(1)).
 
 legal(random,hide_car(?d)) <= true(step(1)),true(closed(?d)).

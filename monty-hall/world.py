@@ -24,51 +24,48 @@ class World(object):
     #Assumption is that this world is discarded after this function is called
     def getSuccessorWorlds(self, takenMoves):
         potentialMovesByOthers = {}
+        tempKb = self.copy()
         for i in takenMoves.keys():
-            self._kb += Term('does', i, takenMoves[i].args[1])
+            tempKb += Term('does', i, takenMoves[i].args[1])
             if i == self._player:
                 potentialMovesByOthers[i] = {
-                    Term('knowsMove', self._player, Term('step', Constant(self._step)),
+                    Term('thinks_move', self._player,
                         Term('does', i, takenMoves[i].args[1])): 1
                 }
             else:
                 potentialMovesByOthers[i] = self.query(\
-                    [Term('knowsMove', self._player, Term('step', Constant(self._step)), \
-                        Term('does', i, Var('_')))])
+                    [Term('thinks_move', self._player, \
+                        Term('does', i, Var('_')))], kb=tempKb)
         
         potentialMoveSequences = \
             self._processMoveSequences(\
                 itertools.product(*[[(key, val) for (key, val) in potentialMovesByOthers[key].items()] \
                     for key in potentialMovesByOthers.keys()]))
 
-        tokens = list(self.query([Term('sees', self._player, Var('_'))]).keys())
+        tokens = set(self.query([Term('sees', self._player, Var('_'))], kb=tempKb).keys())
         successorWorlds = []
         for moves, seqProb in potentialMoveSequences:
-            copyKb = self.copy()
+            copyKb = tempKb.extend()
             for m in moves:
                 copyKb += m
-            potentialTokens = list(map(lambda a: a.args[2], self.query([Term('knows', self._player, \
-                Term('step', Constant(self._step)), Term('sees', self._player, Var('_')))],kb=copyKb).keys()))
-            nextState = map(lambda a: Term('ptrue', a.args[0]),\
+            potentialTokens = set(map(lambda a: a.args[1], self.query([Term('thinks', self._player, \
+                Term('sees', self._player, Var('_')))],kb=copyKb).keys()))
+            if (tokens != potentialTokens):
+                continue
+            nextState = map(lambda a: Term('ptrue', a.args[0]) if a.args[0].functor != "thinks" else a.args[0],\
                 self.query([Term('next', Var('_'))], kb=copyKb).keys())
-            nextPlayerKnowledge = self.query([Term('knows', self._player, \
-                Term('step', Constant(self._step+1)), Var('_'))], kb=copyKb).keys()
 
             potentialWorld = World(self._engine, self._baseModel, self._step + 1,\
-                seqProb*self._prob, set(nextState).union(nextPlayerKnowledge), self._player, tokens)
-            if tokens == potentialTokens:
-                successorWorlds.append(potentialWorld)
+                seqProb*self._prob, set(nextState), self._player, tokens)
+            successorWorlds.append(potentialWorld)
 
         return set(successorWorlds)
 
     # Extract the action out of the knowledge predicate and cumulatively multiply action probabilities to get total sequence probability
     def _processMoveSequences(self, moveSequences):
         return list(map(\
-            lambda seq: (set(map(lambda a: Term('knows', a[0].args[0], a[0].args[1], a[0].args[2]),seq)), \
+            lambda seq: (set(map(lambda a: Term('thinks', a[0].args[0], a[0].args[1]),seq)), \
                 reduce(mul, map(lambda a: a[1], seq))), moveSequences))
-
-    def _normaliseProbabilities(self, world):
-        pass
 
     def query(self, queries, kb=None):
         if kb is None:
@@ -77,18 +74,15 @@ class World(object):
             copyDb = kb.extend()
         for query in queries:
             copyDb += Term('query', query)
-        return get_evaluatable().create_from(copyDb).evaluate()
-
-    def queryFuture(self, queries):
-        copyKb = self.copy()
-        copyKb += Clause(Term('knows', Var('X'), Var('Y'), Var('Z')), Term('knowsMove', Var('X'), Var('Y'), Var('Z')))
-        return self.query(queries, kb=copyKb)
-
+        ret = get_evaluatable().create_from(copyDb).evaluate()
+        for (k,v) in ret.items():
+            ret[k] = v*self._prob
+        return ret
+    #Get legal moves from the perspective of the world player on the moves of a player
     def getLegalMoves(self, playerOfLegalMove):
         return set(map(lambda a: a.args[2],
-            self.query([Term('knows', self._player, Term('step', Constant(self._step)), Term('legal', playerOfLegalMove, Var('_')))]).keys()\
+            self.query([Term('thinks', self._player, Term('legal', playerOfLegalMove, Var('_')))]).keys()\
         ))
-        
-
+    
     def copy(self):
         return self._kb.extend()

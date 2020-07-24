@@ -2,96 +2,90 @@
 role(1). role(0).
 
 %The following 3 predicates are public knowledge at step 1 
-init(closed(door(1))). 
-init(closed(door(2))).
-init(closed(door(3))).
+init(closed(1)). 
+init(closed(2)).
+init(closed(3)).
 init(step(1)).
 
 %Chance that legal move (X,Y,Z) will be taken according to player R based on their knowledge
-1/P::knowsMove(R, step(T), does(X,Y)) :-
+1/P::thinks_move(R, does(X,Y)) :-
     role(R),
-    knows(R, step(T), legal(X,Y)),
-    findall(A,knows(R, step(T), legal(X, A)),Possibilities),
+    thinks(R, legal(X,Y)),
+    findall(A,thinks(R, legal(X, A)),Possibilities),
     length(Possibilities,P), 
     P > 0.
 
-future(step(Y)) :- ptrue(step(X)), Y @>= X.
-past(step(Y)) :- ptrue(step(X)), Y @< X.
-
-%This is derivable by just taking the min and max of the steps
-zucc(Y,X) :- between(1,4,X), Y is X-1.
-
 
 %Legal(player, action, args)
-legal(0, hide_car(door(X))) :- ptrue(step(1)),ptrue(closed(door(X))).
-knows(R, step(1), legal(0, hide_car(door(X)))) :- role(R), future(step(1)), knows(R, step(1), closed(door(X))).
+legal(0, hide_car(X)) :- ptrue(step(1)),ptrue(closed(X)).
+thinks(R, legal(0, hide_car(X))) :- role(R), thinks(R, step(1)), thinks(R, closed(X)).
 
-legal(0, open_door(door(X))) :- ptrue(step(2)),ptrue(closed(door(X))),not ptrue(car(door(X))),not ptrue(chosen(door(X))).
-knows(R, step(2), legal(0, open_door(door(X)))) :- 
+legal(0, open_door(X)) :- ptrue(step(2)),ptrue(closed(X)),not ptrue(car(X)),not ptrue(chosen(X)).
+thinks(R, legal(0, open_door(X))) :- 
     role(R), 
-    future(step(2)), 
-    knows(R, step(2), closed(door(X))),
-    not knows(R, step(2), car(door(X))),
-    not knows(R, step(2), chosen(door(X))).
+    thinks(R, step(2)),
+    thinks(R, closed(X)),
+    not thinks(R, car(X)),
+    not thinks(R, chosen(X)).
 
 legal(0, noop) :- ptrue(step(3)).
-knows(R, step(3), legal(0, noop)) :- role(R), future(step(3)).
+thinks(R, legal(0, noop)) :- role(R), thinks(R, step(3)).
 
-legal(1,choose(door(X))) :- ptrue(step(1)),ptrue(closed(door(X))).
-knows(R, step(1), legal(1, choose(door(X)))) :- role(R), future(step(1)), knows(R, step(1), closed(door(X))).
+legal(1,choose(X)) :- ptrue(step(1)),ptrue(closed(X)).
+thinks(R, legal(1, choose(X))) :- role(R), thinks(R, step(1)), thinks(R, closed(X)).
 
 legal(1, noop) :- ptrue(step(2)).
-knows(R, step(2), legal(1, noop)) :- role(R), future(step(2)).
+thinks(R, legal(1, noop)) :- role(R), thinks(R, step(2)).
 
 legal(1, noop) :- ptrue(step(3)).
-knows(R, step(3), legal(1, noop)) :- role(R), future(step(3)).
+thinks(R, legal(1, noop)) :- role(R), thinks(R, step(3)).
 
 legal(1,switch) :- ptrue(step(3)).
-knows(R, step(3), legal(1,switch)) :- role(R), future(step(3)).
+thinks(R, legal(1,switch)) :- role(R), thinks(R, step(3)).
 
-sees(1,door(X)) :- does(0,open_door(door(X))).
-knows(1, step(Y), sees(1,door(X))) :- knows(1, step(Y), does(0,open_door(door(X)))).
+sees(1,X) :- does(0,open_door(X)).
+thinks(1, sees(1,X)) :- thinks(1, does(0,open_door(X))).
 
-sees(1,door(X)) :- ptrue(step(3)), ptrue(car(door(X))).
-knows(1, step(Y), sees(1,door(X))) :- knows(1, step(Y), step(3)), knows(1, step(Y), car(door(X))).
+sees(1,X) :- ptrue(step(3)), ptrue(car(X)).
+thinks(1, sees(1,X)) :- thinks(1, step(3)), thinks(1, car(X)).
 
-next(car(door(X))) :- does(0,hide_car(door(X))).
-knows(R, step(Y), car(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), does(0,hide_car(door(Z)))).
+next(car(X)) :- does(0,hide_car(X)).
+next(thinks(R, car(Z))) :- role(R), thinks(R, does(0,hide_car(Z))).
 
-next(car(door(X))) :- ptrue(car(door(X))).
-knows(R, step(Y), car(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), car(door(Z))).
+next(car(X)) :- ptrue(car(X)).
+next(thinks(R, car(Z))) :- role(R), thinks(R, car(Z)).
 
-next(closed(door(X))) :- ptrue(closed(door(X))),not does(0,open_door(door(X))).
-knows(R, step(Y), closed(door(Z))) :- role(R), zucc(X,Y),knows(R, step(X), closed(door(Z))), not knows(R, step(X), does(0,open_door(door(Z)))).
+next(closed(X)) :- ptrue(closed(X)),not does(0,open_door(X)).
+next(thinks(R, closed(Z))) :- role(R), thinks(R, closed(Z)), not thinks(R, does(0,open_door(Z))).
 
-next(chosen(door(X))) :- does(1,choose(door(X))).
-knows(R, step(Y), chosen(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), does(1,choose(door(Z)))).
+next(chosen(X)) :- does(1,choose(X)).
+next(thinks(R, chosen(Z))) :- role(R), thinks(R, does(1,choose(Z))).
 
 
-next(chosen(door(X))) :- ptrue(chosen(door(X))),not does(1,switch).
-knows(R, step(Y), chosen(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), chosen(door(Z))),not knows(R, step(X), does(1,switch)).
+next(chosen(X)) :- ptrue(chosen(X)),not does(1,switch).
+next(thinks(R, chosen(Z))) :- role(R), thinks(R, chosen(Z)),not thinks(R, does(1,switch)).
 
-next(chosen(door(X))) :- does(1,switch),ptrue(closed(door(X))),not ptrue(chosen(door(X))).
-knows(R, step(Y), chosen(door(Z))) :- role(R), zucc(X,Y), knows(R, step(X), does(1,switch)),knows(R, step(X), closed(door(Z))),not knows(R, step(X), chosen(door(Z))).
+next(chosen(X)) :- does(1,switch),ptrue(closed(X)),not ptrue(chosen(X)).
+next(thinks(R, chosen(Z))) :- role(R), thinks(R, does(1,switch)),thinks(R, closed(Z)),not thinks(R, chosen(Z)).
 
 
 next(step(2)) :- ptrue(step(1)).
-knows(R, step(Y), step(2)) :- zucc(X,Y), role(R), knows(R, step(X), step(1)).
+next(thinks(R, step(2))) :- role(R), thinks(R, step(1)).
 
 next(step(3)) :- ptrue(step(2)).
-knows(R, step(Y), step(3)) :- zucc(X,Y), role(R), knows(R, step(X), step(2)).
+next(thinks(R, step(3))) :- role(R), thinks(R, step(2)).
 
 next(step(4)) :- ptrue(step(3)).
-knows(R, step(Y), step(4)) :- zucc(X,Y), role(R), knows(R, step(X), step(3)).
+next(thinks(R, step(4))) :- role(R), thinks(R, step(3)).
 
 terminal :- ptrue(step(4)).
-knows(R, step(X), terminal) :- knows(R, step(X), step(4)), role(R).
+thinks(R, terminal) :- role(R), thinks(R, step(4)).
 
-goal(1,100) :- ptrue(chosen(door(X))), ptrue(car(door(X))).
-knows(R, step(X), goal(1,100)) :- role(R), knows(R, step(X), step(X)), knows(R,step(X), car(door(Z))), knows(R,step(X), chosen(door(Z))).
+goal(1,100) :- ptrue(chosen(X)), ptrue(car(X)).
+thinks(R, goal(1,100)) :- role(R), thinks(R, car(Z)), thinks(R, chosen(Z)).
 
-goal(1, 0) :- ptrue(chosen(door(X))), not ptrue(car(door(X))).
-knows(R, step(X), goal(1,0)) :- role(R), knows(R, step(X), step(X)), not knows(R,step(X), car(door(Z))), knows(R,step(X), chosen(door(Z))).
+goal(1, 0) :- ptrue(chosen(X)), not ptrue(car(X)).
+thinks(R, goal(1,0)) :- role(R), not thinks(R, car(Z)), thinks(R, chosen(Z)).
 
 goal(0,0).
-knows(R, step(X), goal(0,0)) :- role(R), knows(R,step(X), step(X)).
+thinks(R, goal(0,0)) :- role(R).

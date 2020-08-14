@@ -12,7 +12,7 @@ class GDLTerm(object):
 
 class File_Format(Enum):
     PREFIX = auto()
-    POSTFIX = auto()
+    INFIX = auto()
 
 
 class GDLIIIParser(object):
@@ -21,7 +21,7 @@ class GDLIIIParser(object):
         #If we are trying to define a predicate that is the same as a builtin, prepend a p
         self._existing_builtins = {}
         for line in open('./problog_builtins.txt'):
-            self._existing_builtins[line] = f"p{line}"
+            self._existing_builtins[line.rstrip()] = f"p{line.rstrip()}"
         self._pred_map = {}
         self._player_count = 0
 
@@ -30,7 +30,7 @@ class GDLIIIParser(object):
         self._player_count = 0
         #For now, assume file_format is POSTFIX
         process_func = {
-            File_Format.POSTFIX: lambda a: problog_lines.write(self._process_line_postfix(a)),
+            File_Format.INFIX: lambda a: problog_lines.write(self._process_line_infix(a)),
             File_Format.PREFIX: lambda a: problog_lines.write(self._process_line_prefix(a))
         }[file_format]
 
@@ -48,9 +48,9 @@ class GDLIIIParser(object):
         r.close()
         return PrologFile('./translated.prob')
 
-    def _process_line_postfix(self, gdl: str):
+    def _process_line_infix(self, gdl: str):
         if ("<=" in gdl):
-            return self._handle_rule_postfix(gdl)
+            return self._handle_rule_infix(gdl)
         elif gdl.startswith('role'):
             player = gdl.replace("role(", "").replace(").", "").strip()
             if (player == "random"):
@@ -60,9 +60,9 @@ class GDLIIIParser(object):
                 self._pred_map[player] = str(self._player_count)
             return f"role({self._pred_map[player]}).\n"
         else:
-            return self._handle_fact_postfix(gdl)
+            return self._handle_fact_infix(gdl)
     #This is going to be a long function, will optimise later (I have a lot of ideas for this that are a lot cleaner)
-    def _handle_rule_postfix(self, rule):
+    def _handle_rule_infix(self, rule):
         #Replace variables first
         rule = rule.replace('<=',':-').strip()
         var_match = re.compile(r'\?.')
@@ -74,6 +74,12 @@ class GDLIIIParser(object):
             rule = rule.replace(i, self._pred_map[i])
         for i in self._existing_builtins.keys():
             rule = rule.replace(i, self._existing_builtins[i])
+
+        if ('knows' in rule):
+            return rule + '\n'
+        if (not any([i in rule for i in ['does', 'next', 'legal', 'sees']])):
+            return rule + '\n'
+        
         if (rule.startswith('next')):
             think_rule = 'next(thinks(R,' + rule.replace('next(', "")
         else:
@@ -101,7 +107,9 @@ class GDLIIIParser(object):
         return rule + '\n' + think_rule + '\n'
         
 
-    def _handle_fact_postfix(self, fact):
+    def _handle_fact_infix(self, fact):
+        for i in self._existing_builtins.keys():
+            fact = fact.replace(i, self._existing_builtins[i])
         for i in self._pred_map.keys():
             return fact.replace(i, self._pred_map[i]).strip() + '\n'
 
@@ -119,4 +127,4 @@ class GDLIIIParser(object):
 #Parser testing
 if __name__ == "__main__":
     p = GDLIIIParser()
-    print(p.output_problog('./montyhall.gdliii', File_Format.POSTFIX))
+    print(p.output_problog('./montyhall.gdliii', File_Format.INFIX))

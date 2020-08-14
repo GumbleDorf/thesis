@@ -17,7 +17,7 @@
 (<= (next (step ?n)) (true (step ?m)) (succ ?m ?n))
 
 (<= (num ?n) (true (secret ?n)))
-(<= (kows_the_number ?r) (role ?r) (knows ?r (num ?n)))
+(<= (knows_the_number ?r) (role ?r) (knows ?r (num ?n)))
 (<= (terminal) (or (knows_the_number player) (true (step 12))))
 (<= (goal player 100) (knows_the_number player))
 (<= (goal player 0) (not (knows_the_number player)))

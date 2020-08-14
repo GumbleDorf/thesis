@@ -1,0 +1,88 @@
+role(player).
+role(random).
+knows(0,0).
+number(1).
+number(2).
+number(3).
+number(4).
+number(5).
+number(6).
+number(7).
+number(8).
+number(9).
+number(10).
+number(11).
+number(12).
+number(13).
+number(14).
+number(15).
+number(16).
+number(17).
+number(18).
+number(19).
+number(20).
+number(21).
+number(22).
+number(23).
+number(24).
+number(25).
+number(26).
+number(27).
+number(28).
+number(29).
+number(30).
+number(31).
+number(32).
+succ(0,1).
+succ(1,2).
+succ(2,3).
+succ(3,4).
+succ(4,5).
+succ(5,6).
+succ(6,7).
+succ(7,8).
+succ(8,9).
+succ(9,10).
+succ(10,11).
+succ(11,12).
+succ(12,13).
+succ(13,14).
+succ(14,15).
+succ(15,16).
+succ(16,17).
+succ(17,18).
+succ(18,19).
+succ(19,20).
+succ(20,21).
+succ(21,22).
+succ(22,23).
+succ(23,24).
+succ(24,25).
+succ(25,26).
+succ(26,27).
+succ(27,28).
+succ(28,29).
+succ(29,30).
+succ(30,31).
+succ(31,32).
+less(?m,?n) <= succ(?m,?n).
+less(?m, ?n) <= succ(?m,?l), less(?l,?n).
+init(step(0)).
+
+legal(random, choose(?n)) <= number(?n), true(step(0)).
+legal(random,noop) <= not(true(step(0))).
+
+legal(player,noop) <= true(step(0)).
+legal(player,ask_if_less(?n)) <= number(?n), not(true(step(0))).
+sees(player,yes) <= does(player, ask_if_less(?n)), true(secret(?m)), less(?m,?n).
+
+next(secret(?n)) <= does(random, choose(?n)).
+next(secret(?n)) <= true(secret(?n)).
+next(step(?n)) <= true(step(?m)), succ(?m,?n).
+
+num(?n) <= true(secret(?n)).
+knows_the_number(?r) <= role(?r), knows(?r, num(?n)).
+terminal <= knows_the_number(player).
+terminal <= true(step(12)).
+goal(player, 100) <= knows_the_number(player).
+goal(player, 0) <= not(knows_the_number(player)).

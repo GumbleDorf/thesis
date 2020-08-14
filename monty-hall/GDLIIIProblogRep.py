@@ -17,8 +17,8 @@ class GDLIIIProblogRep(object):
         # For now, just use the written model
         #baseModelFile = generateProblogStringFromGDLIII(program)
         gdl_parser = GDLIIIParser()
-        self._baseModelFile = gdl_parser.output_problog(program, File_Format.POSTFIX)
-        #self._baseModelFile = gdl_parser.output()
+        self._baseModelFile = gdl_parser.output_problog(program, File_Format.INFIX)
+        #self._baseModelFile = PrologFile('guessmodel.prob')
         self._playerList = []
         self._randomIdentifier = Constant(0) #Hardcoded to give the random player a specific constant id as we apply some special rules to the random player
         self._playerWorlds = self._initialiseKB()
@@ -121,9 +121,10 @@ class GDLIIIProblogRep(object):
                     w._preds.add(p)
                     w._kb += p
             #Add all pknows predicates to all worlds
-
+        
         if len([(k,v) for (k,v) in self._rawQuery(\
              self._randomIdentifier, Term('terminal')).items() if v > 0]) > 0:
+            
             self.terminal = True
         else:
             self._currentLegalMoves = self._generateLegalMoves()
@@ -158,7 +159,7 @@ def playMonty():
 
 #Test function to demonstrate playing monty hall with the model
 def playGuessing():
-    model = GDLIIIProblogRep('guess.gdliii')
+    model = GDLIIIProblogRep('guessinfix.gdliii')
     main_loop(model)
 
 def main_loop(model):
@@ -168,6 +169,10 @@ def main_loop(model):
         model.submitAction(choice(playerMoves), Constant(1))
         model.submitAction(choice(randomMoves), Constant(0))
         model.applyActionsToModelAndUpdate()
+        #For Monty Hall
+        print(model.query(Constant(1), Term('car', Var('_'))))
+        #For guessing game
+        #print(model.query(Constant(1), Term('num', Var('_'))))
 if __name__ == "__main__":
     playMonty()
     #playGuessing()

@@ -22,6 +22,7 @@ class World(object):
         self._tokens = tokens
 
     #Assumption is that this world is discarded after this function is called
+    #If simulation is called
     def getSuccessorWorlds(self, takenMoves):
         potentialMovesByOthers = {}
         tempKb = self.copy()
@@ -74,10 +75,12 @@ class World(object):
             copyDb = kb.extend()
         for query in queries:
             copyDb += Term('query', query)
+
         ret = get_evaluatable().create_from(copyDb).evaluate()
         for (k,v) in ret.items():
             ret[k] = v*self._prob
         return ret
+
     #Get legal moves from the perspective of the world player on the moves of a player
     def getLegalMoves(self, playerOfLegalMove):
         return set(map(lambda a: a.args[2],

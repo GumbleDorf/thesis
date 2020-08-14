@@ -69,6 +69,7 @@ psucc(31,32).
 less(X,Y) :- psucc(X,Y).
 less(X,Y) :- psucc(X,Z), less(Z, Y).
 init(step(0)).
+knows(R, q) :- role(R).
 
 %Chance that legal move (X,Y,Z) will be taken according to player R based on their knowledge
 1/P::thinks_move(R, does(X,Y)) :-

@@ -114,4 +114,4 @@ terminal :- ptrue(step(12)).
 
 goal(1, 100) :- knows_the_number(1).
 
-goal(0,100) :- knows_the_number(1).
+goal(1,0) :- not(knows_the_number(1)).

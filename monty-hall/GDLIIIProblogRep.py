@@ -11,13 +11,14 @@ from GDLIIIParser import GDLIIIParser, File_Format
 
 #This is just a preliminary program to solve Monty Hall, not generalised yet.
 class GDLIIIProblogRep(object):
-    def __init__(self, program):
+    def __init__(self, program, fformat):
         #GlobalEngine
         self._engine = DefaultEngine()
         # For now, just use the written model
         #baseModelFile = generateProblogStringFromGDLIII(program)
         gdl_parser = GDLIIIParser()
-        self._baseModelFile = gdl_parser.output_problog(program, File_Format.INFIX)
+        self._model = gdl_parser.output_model(program, fformat)
+        self._baseModelFile = self._model.as_problog()
         #self._baseModelFile = PrologFile('guessmodel.prob')
         self._playerList = []
         self._randomIdentifier = Constant(0) #Hardcoded to give the random player a specific constant id as we apply some special rules to the random player
@@ -154,12 +155,12 @@ class GDLIIIProblogRep(object):
 
 #Test function to demonstrate playing monty hall with the model
 def playMonty():
-    model = GDLIIIProblogRep('montyhall.gdliii')
+    model = GDLIIIProblogRep('./examples/montyhall.gdliii', File_Format.INFIX)
     main_loop(model)
 
 #Test function to demonstrate playing monty hall with the model
 def playGuessing():
-    model = GDLIIIProblogRep('guessinfix.gdliii')
+    model = GDLIIIProblogRep('./examples/guess.gdliii', File_Format.PREFIX)
     main_loop(model)
 
 def main_loop(model):

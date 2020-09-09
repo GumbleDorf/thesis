@@ -14,12 +14,20 @@ GDL_KEYWORDS = frozenset(['ptrue', 'legal', 'does', 'terminal', 'knows', 'sees',
 class GDLMetaObject(object):
     def __init__(self, pred, *args):
         self.pred = pred
-        self.args = list(args)
+        self.args = []
+        for i in args:
+            if not issubclass(type(i), GDLMetaObject):
+                self.args.append(GDLTerm(i))
+            else:
+                self.args.append(i)
 
     def __getitem__(self,key):
         return self.args[key]
     def __setitem__(self, key, value):
-        self.args[key] = value
+        if not issubclass(type(value), GDLMetaObject):
+            self.args[key] = GDLTerm(value)
+        else:
+            self.args[key] = value
     def __deepcopy__(self, memo):
         return type(self)(deepcopy(self.pred, memo), *deepcopy(self.args, memo))
 
@@ -34,15 +42,17 @@ class GDLMetaObject(object):
     def __len__(self):
         return len(self.args)
     def replace(self, orig, repl) -> None:
-        if issubclass(type(self.pred), GDLMetaObject):
-            self.pred.replace(orig,repl)
-        elif self.pred == orig:
+        if self.pred == orig:
             self.pred = repl
-        for i in range(len(self.args)):
-            if issubclass(type(self.args[i]), GDLMetaObject):
-                self.args[i].replace(orig,repl)
-            elif self.args[i] == orig:
-                self.args[i] = repl
+        for i in range(len(self)):
+            self[i].replace(orig,repl)
+    def __eq__(self, other):
+        if issubclass(type(other), GDLMetaObject) or type(other) == str:
+            return str(self) == str(other)
+        else:
+            raise Exception("Cannot compare with type {}".format(type(other)))
+    def __hash__(self):
+        return hash(str(self))
     def generate_thinks(self, excluded_predicates = set()) -> None:
         return None
                 
@@ -55,35 +65,36 @@ class GDLRule(GDLMetaObject):
     def __str__(self):
         return f"{self.args[0]} :- " + ",".join(map(str,self.args[1:]))
     def generate_thinks(self, excluded_predicates = set()) -> GDLMetaObject:
-        if self.args[0].pred in excluded_predicates:
+        if self[0].pred in excluded_predicates:
             return None
         else:
-            lhs = self.args[0].generate_thinks(excluded_predicates)
+            lhs = self[0].generate_thinks(excluded_predicates)
             rhs = [i.generate_thinks(excluded_predicates) for i in self.args[1:]]
             if lhs is None or len(rhs) == 0:
                 return None
             else:
                 return GDLRule(lhs, GDLTerm("role", "R"), *rhs)
     
-#Class for predicates
+#Class for predicates and atomics
+#Atomic will have an argument length of 0, len(term) == 0, predicates will have len(term) > 0
 class GDLTerm(GDLMetaObject):
     def __init__(self, pred, *args):
         super().__init__(pred,*args)
     def __str__(self):
         if len(self.args) > 0:
-            return self.pred + "(" + ",".join(map(str,self.args)) + ")"
+            return str(self.pred) + "(" + ",".join(map(str,self.args)) + ")"
         else:
-            return self.pred
+            return str(self.pred)
     def generate_thinks(self, excluded_predicates = set()) -> GDLMetaObject:
         #Assumption, ptrue and next only have one argument
-        if self.pred == 'ptrue':
+        if str(self.pred) == 'ptrue':
             return GDLTerm('thinks', 'R', self.args[0])
-        elif self.pred == "knows":
+        elif str(self.pred) == "knows":
             #Taking into account knows/1 and knows/2
             return GDLTerm('thinks', 'R', self.args[0 if len(self) == 1 else 1])
-        elif self.pred == 'next' or self.pred == "not":
+        elif str(self.pred) == 'next' or str(self.pred) == "not":
             return GDLTerm(self.pred, self.args[0].generate_thinks(excluded_predicates))
-        elif self.pred not in excluded_predicates:
+        elif str(self.pred) not in excluded_predicates:
             return GDLTerm("thinks", "R", self)
         else:
             return self
@@ -121,30 +132,29 @@ class GDLIterative(GDLMetaObject):
         for seq in self._get_integer_args(self.args[0]):
             from_val = self._from.get_item_with_index_sequence(seq)
             to_val = _to.get_item_with_index_sequence(seq)
-            if (from_val != to_val):
-                self._difference = to_val - from_val
+            if (from_val.pred != to_val.pred):
+                self._difference = to_val.pred - from_val.pred
                 self._it_args.append(seq)
     def _get_integer_args(self, gdl: GDLTerm) -> [list]:
         index_args = []
+        if type(gdl.pred) == int:
+            return [[]]
         for i in range(len(gdl)):
-            if type(gdl[i]) == int:
-                index_args.append([i])
-            elif issubclass(type(gdl[i]), GDLMetaObject):
-                ret_val = self._get_integer_args(gdl[i])
-                for sublist in ret_val:
-                    sublist.insert(0,i)
-                index_args.extend(ret_val)
+            ret_val = self._get_integer_args(gdl[i])
+            for sublist in ret_val:
+                sublist.insert(0,i)
+            index_args.extend(ret_val)
         return index_args
     def __str__(self):
         init_str = [str(self._from.obj)]
-        values = [self._from.get_item_with_index_sequence(self._it_args[i]) for i in range(len(self._it_args))]
+        values = [self._from.get_item_with_index_sequence(self._it_args[i]).pred for i in range(len(self._it_args))]
         for _ in range(self._difference):
             for i in range(len(self._it_args)):
                 values[i] += 1
                 self._from.set_item_with_index_sequence(self._it_args[i], values[i])
             init_str.append(str(self._from.obj))
         for i in range(len(self._it_args)):
-            self._from.set_item_with_index_sequence(self._it_args[i],self._from.get_item_with_index_sequence(self._it_args[i]) - self._difference)
+            self._from.set_item_with_index_sequence(self._it_args[i],self._from.get_item_with_index_sequence(self._it_args[i]).pred - self._difference)
         return ".\n".join(init_str)
 
 #Class representing entire gdliii program, does not inherit from GDLMetaObject
@@ -160,12 +170,13 @@ class GDLProgram(object):
         self._player_num = 1
         self.player_map = {}
         self._converted = False
+        self._extra_rules = None
     def _add_gdl(self, gdl) -> None:
-        if type(gdl) == GDLTerm and gdl.pred == "role" and len(gdl) == 1:
-            if gdl.args[0] == "random":
-                self.player_map[gdl.args[0]] = 0
+        if type(gdl) == GDLTerm and str(gdl.pred) == "role" and len(gdl) == 1:
+            if str(gdl[0]) == "random":
+                self.player_map[str(gdl[0])] = 0
             else:
-                self.player_map[gdl.args[0]] = self._player_num
+                self.player_map[str(gdl[0])] = self._player_num
                 self._player_num += 1
         self._lines.append(gdl)
     def __str__(self) -> str:
@@ -173,6 +184,7 @@ class GDLProgram(object):
     def _finalise_model(self, replacement_map = {}, extra_rules = []) -> None:
         if self._converted:
             raise Exception("Cannot call _finalise_model more than once per GDLProgram object")
+        self._extra_rules = extra_rules
         new_lines = []
         var_num = 1
         var_map = {}
@@ -195,25 +207,22 @@ class GDLProgram(object):
     #Excluded list is made from non-game defined single predicated (e.g. psucc in guess.gdliii), and rule that has only terms of this nature on rhs is not to be duplicated
     #Evaluates a term and updates the curr_deps set accordingly, returns true if gdl is an independent term
     def _add_independent_term(self, statement: GDLMetaObject, curr_deps: set) -> bool:
-        if (type(statement) == GDLTerm and statement.pred not in GDL_KEYWORDS and statement.pred not in curr_deps):
-            curr_deps.add(statement.pred)
+        if (type(statement) == GDLTerm and str(statement.pred) not in GDL_KEYWORDS and str(statement.pred) not in curr_deps):
+            curr_deps.add(str(statement.pred))
             return True
-        elif (type(statement) == GDLIterative and statement.args[0].pred not in GDL_KEYWORDS and statement.args[0].pred not in curr_deps):
-            curr_deps.add(statement.args[0].pred)
+        elif (type(statement) == GDLIterative and str(statement[0].pred) not in GDL_KEYWORDS and str(statement[0].pred) not in curr_deps):
+            curr_deps.add(str(statement[0].pred))
             return True
-        elif (type(statement) == GDLIterative and statement.args[1].pred not in GDL_KEYWORDS and statement.args[1].pred not in curr_deps):
-            curr_deps.add(statement.args[1].pred)
-            return True
-        elif (type(statement) == GDLRule) and statement.args[0].pred not in GDL_KEYWORDS \
-            and statement.args[0].pred not in curr_deps and all([self._is_independent_term(arg,curr_deps) for arg in statement.args[1:]]):
-                curr_deps.add(statement.args[0].pred)
+        elif (type(statement) == GDLRule) and str(statement[0].pred) not in GDL_KEYWORDS \
+            and str(statement[0].pred) not in curr_deps and all([self._is_independent_term(arg,curr_deps) for arg in statement[1:]]):
+                curr_deps.add(str(statement[0].pred))
                 return True
         return False
 
     #Function to evaluate whether a term, and, or clause is independent
     def _is_independent_term(self, gdl: GDLMetaObject, curr_deps: set) -> bool:
         if type(gdl) == GDLTerm:
-            return gdl.pred in curr_deps
+            return str(gdl.pred) in curr_deps
         elif type(gdl) == GDLAnd:
             return all([self._is_independent_term(arg, curr_deps) for arg in gdl.args])
         elif type(gdl) == GDLOr:
@@ -223,19 +232,20 @@ class GDLProgram(object):
 
     
     def _translate_variables(self, gdl: GDLMetaObject, next_var_num: int, var_map: dict) -> int:
-        for i in range(len(gdl.args)):
-            if issubclass(type(gdl.args[i]),GDLMetaObject):
-                next_var_num = self._translate_variables(gdl.args[i], next_var_num, var_map)
-            elif type(gdl.args[i]) == str and gdl.args[i].startswith("?"):
-                if gdl.args[i] not in var_map.keys():
-                    var_map[gdl.args[i]] = "Var"+str(next_var_num)
+        for i in range(len(gdl)):
+            if len(gdl[i]) > 0:
+                next_var_num = self._translate_variables(gdl[i], next_var_num, var_map)
+            elif type(gdl[i].pred) == str and gdl[i].pred.startswith("?"):
+                if gdl[i].pred not in var_map.keys():
+                    var_map[gdl[i].pred] = "Var"+str(next_var_num)
                     next_var_num += 1 
-                gdl.args[i] = var_map[gdl.args[i]]
+                gdl[i].pred = var_map[gdl[i].pred]
         return next_var_num
+    #Returns the problog string of the program
     def as_problog(self) -> PrologString:
         if not self._converted:
             raise Exception("Cannot extract Problog representation without finalising the model by calling _finalise_model")
-        return PrologString(str(self))
+        return PrologString("\n".join(self._extra_rules) + "\n" + str(self))
 
 class File_Format(Enum):
     PREFIX = auto()
@@ -257,7 +267,7 @@ class GDLIIIParser(object):
         }[file_format]
         program = "".join(open(program_file).readlines()).replace("\n","")
         gdl_spec = process_func(program)
-        gdl_spec._finalise_model(self._existing_builtins)
+        gdl_spec._finalise_model(self._existing_builtins, self._populate_predefined_preds())
         return gdl_spec
 
     def _infix_rule_rhs_split(self, gdl) -> [GDLMetaObject]:
@@ -351,18 +361,18 @@ class GDLIIIParser(object):
                 primitive = True
             elif primitive and term != "" and (c == " " or c == ")"):
                 try:
-                    args.append(int(term))
+                    args.append(GDLTerm(int(term)))
                 except:
-                    args.append(term)
+                    args.append(GDLTerm(term))
                 term = ""
 
         if paren_count != 0:
             raise Exception("Unmatched parentheses in statement {}".format(statement))
-        if args[0] == "<=":
+        if args[0].pred == "<=":
             return GDLRule(args[1], *args[2:])
-        elif issubclass(type(args[0]), GDLMetaObject):
+        elif len(args[0]) > 0:
             return GDLAnd(*args)
-        elif args[0] == "or":
+        elif args[0].pred == "or":
             return GDLOr(*args[1:])
         else:
             return GDLTerm(args[0], *args[1:])
@@ -404,6 +414,6 @@ class GDLIIIParser(object):
 #Parser testing
 if __name__ == "__main__":
     p = GDLIIIParser()
-    #print(p.output_model('./examples/montyhall.gdliii', File_Format.INFIX))
-    q = p.output_model('./examples/guess.gdliii', File_Format.PREFIX)
-    print(q)
+    print(p.output_model('./examples/montyhall.gdliii', File_Format.INFIX))
+    #q = p.output_model('./examples/guess.gdliii', File_Format.PREFIX)
+    #print(q)

@@ -55,12 +55,15 @@ class GDLRule(GDLMetaObject):
     def __str__(self):
         return f"{self.args[0]} :- " + ",".join(map(str,self.args[1:]))
     def generate_thinks(self, excluded_predicates = set()) -> GDLMetaObject:
-        lhs = self.args[0].generate_thinks()
-        rhs = [j for j in [i.generate_thinks() for i in self.args[1:]] if j is not None]
-        if lhs is None or len(rhs) == 0:
+        if self.args[0].pred in excluded_predicates:
             return None
         else:
-            return GDLRule(lhs, GDLTerm("role", "R"), *rhs)
+            lhs = self.args[0].generate_thinks(excluded_predicates)
+            rhs = [i.generate_thinks(excluded_predicates) for i in self.args[1:]]
+            if lhs is None or len(rhs) == 0:
+                return None
+            else:
+                return GDLRule(lhs, GDLTerm("role", "R"), *rhs)
     
 #Class for predicates
 class GDLTerm(GDLMetaObject):
@@ -79,7 +82,7 @@ class GDLTerm(GDLMetaObject):
             #Taking into account knows/1 and knows/2
             return GDLTerm('thinks', 'R', self.args[0 if len(self) == 1 else 1])
         elif self.pred == 'next' or self.pred == "not":
-            return GDLTerm(self.pred, GDLTerm("thinks", "R", self.args[0]))
+            return GDLTerm(self.pred, self.args[0].generate_thinks(excluded_predicates))
         elif self.pred not in excluded_predicates:
             return GDLTerm("thinks", "R", self)
         else:
@@ -91,7 +94,7 @@ class GDLOr(GDLMetaObject):
     def __str__(self):
         return "(" + ";".join(map(str,self.args)) + ")"
     def generate_thinks(self, excluded_predicates = set()) -> GDLMetaObject:
-        pass
+        return GDLOr(*[i.generate_thinks(excluded_predicates) for i in self.args])
 
 #GDLAnd is implicitly used by comma (,) separation, or can be called explicitly in prefix form by having an argument sequence with no predicate name
 #Useful for complex Or conditions
@@ -101,7 +104,7 @@ class GDLAnd(GDLMetaObject):
     def __str__(self):
         return "(" + ",".join(map(str,self.args)) + ")"
     def generate_thinks(self, excluded_predicates = set()) -> GDLMetaObject:
-        pass
+        return GDLAnd(*[i.generate_thinks(excluded_predicates) for i in self.args])
 
 #Class to model a ... iterative structure shorthand in gdliii, takes in lhs and rhs, which must be the same predicate with the same number of arguments
 #__str__ method generates every predicate in sequence from from_term to to_term
@@ -177,14 +180,48 @@ class GDLProgram(object):
             for (original, replacement) in {**self.player_map, **replacement_map}.items():
                 statement.replace(original,replacement)
             var_num = self._translate_variables(statement, var_num, var_map)
+        indep_terms = set()
+        while (any([self._add_independent_term(line, indep_terms) for line in self._lines])):
+            pass
+        for statement in self._lines:
             if type(statement) == GDLRule:
-                new_rule = statement.generate_thinks()
+                new_rule = statement.generate_thinks(indep_terms)
                 if new_rule is not None:
                     new_lines.append(new_rule)
-        #TODO: Identify non-dependent clauses that do not need a thinks rule.
-        # Excluded list is made from non-game defined single predicated (e.g. psucc in guess.gdliii), and rule that has only terms of this nature on rhs is not to be duplicated
         self._lines.extend(new_lines)
         self._converted = True
+
+
+    #Excluded list is made from non-game defined single predicated (e.g. psucc in guess.gdliii), and rule that has only terms of this nature on rhs is not to be duplicated
+    #Evaluates a term and updates the curr_deps set accordingly, returns true if gdl is an independent term
+    def _add_independent_term(self, statement: GDLMetaObject, curr_deps: set) -> bool:
+        if (type(statement) == GDLTerm and statement.pred not in GDL_KEYWORDS and statement.pred not in curr_deps):
+            curr_deps.add(statement.pred)
+            return True
+        elif (type(statement) == GDLIterative and statement.args[0].pred not in GDL_KEYWORDS and statement.args[0].pred not in curr_deps):
+            curr_deps.add(statement.args[0].pred)
+            return True
+        elif (type(statement) == GDLIterative and statement.args[1].pred not in GDL_KEYWORDS and statement.args[1].pred not in curr_deps):
+            curr_deps.add(statement.args[1].pred)
+            return True
+        elif (type(statement) == GDLRule) and statement.args[0].pred not in GDL_KEYWORDS \
+            and statement.args[0].pred not in curr_deps and all([self._is_independent_term(arg,curr_deps) for arg in statement.args[1:]]):
+                curr_deps.add(statement.args[0].pred)
+                return True
+        return False
+
+    #Function to evaluate whether a term, and, or clause is independent
+    def _is_independent_term(self, gdl: GDLMetaObject, curr_deps: set) -> bool:
+        if type(gdl) == GDLTerm:
+            return gdl.pred in curr_deps
+        elif type(gdl) == GDLAnd:
+            return all([self._is_independent_term(arg, curr_deps) for arg in gdl.args])
+        elif type(gdl) == GDLOr:
+            return any([self._is_independent_term(arg, curr_deps) for arg in gdl.args])
+        else:
+            raise Exception("Unexpected type provided to _is_independent_term, expected GDLTerm, GDLAnd or GDLOr")
+
+    
     def _translate_variables(self, gdl: GDLMetaObject, next_var_num: int, var_map: dict) -> int:
         for i in range(len(gdl.args)):
             if issubclass(type(gdl.args[i]),GDLMetaObject):

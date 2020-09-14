@@ -1,0 +1,7 @@
+%Chance that legal move (X,Y,Z) will be taken according to player R based on their knowledge
+1/P::thinks_move(R, does(X,Y)) :- role(R), thinks(R, legal(X,Y)), findall(A,thinks(R, legal(X, A)),Possibilities),length(Possibilities,P), P > 0.
+0::knows(-1,-1).
+0::legal(-1,-1).
+0::does(-1,-1).
+0::next(-1).
+0::ptrue(-1).

@@ -82,7 +82,7 @@ class GDLTerm(GDLMetaObject):
         super().__init__(pred,*args)
     def __str__(self):
         if len(self) == 2 and self.pred == "distinct":
-            return str(self[0]) + " != " + str(self[1])
+            return str(self[0]) + " \= " + str(self[1])
         elif len(self) > 0:
             return str(self.pred) + "(" + ",".join(map(str,self.args)) + ")"
         else:
@@ -270,6 +270,7 @@ class GDLIIIParser(object):
         program = "".join(open(program_file).readlines()).replace("\n","")
         gdl_spec = process_func(program)
         gdl_spec._finalise_model(self._existing_builtins, self._populate_predefined_preds())
+        print(gdl_spec)
         return gdl_spec
 
     def _infix_rule_rhs_split(self, gdl) -> [GDLMetaObject]:

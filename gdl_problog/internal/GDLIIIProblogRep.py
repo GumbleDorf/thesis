@@ -136,6 +136,8 @@ class GDLIIIProblogRep(object):
         for _ in range(increment):
             self._cur_node = self._cur_node.parent
         self._moveList = dict([(i,None) for i in self._playerList])
+        if self.terminal:
+            self.terminal = False
 
     def getLegalMovesForPlayer(self, player):
         return self._cur_node.legal_moves[player]

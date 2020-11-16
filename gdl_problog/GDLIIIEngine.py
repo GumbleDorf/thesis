@@ -9,6 +9,9 @@ class GDLIIIEngine(object):
         self._gdl_rep = GDLIIIProblogRep(file_name, fformat)
         self._player_map = self._gdl_rep._model.player_map
         self.player_names = list(self._player_map.keys())
+    #Must be called when inserting player name into a query clause
+    def player_to_id(self, player):
+        return self._player_map[player]
     # Make a query at the current step, alternatively, make a query to a future step using only currently known information
     # Query is made from the perspective of player names in player parameter
     # Returns a list of pairs, with probability in index 0 and the corresponding predicate in index 1

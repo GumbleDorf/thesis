@@ -2,17 +2,17 @@ from problog.logic import Term, Constant,Var, Clause
 from problog import get_evaluatable
 import itertools
 from functools import reduce
+from uuid import uuid4
 from operator import mul
 class World(object):
-    def __init__(self, engine, model, step, prob, preds, player, tokens=None):
+    def __init__(self, engine, model, step, prob, preds, player, tokens=None, moves_id=None):
         #Set of predicates required to generate this world from the base file
         self._preds = preds
-
         self._engine = engine
         self._player = player
         self._baseModel = model
         self._kb = self._engine.prepare(self._baseModel)
-
+        self.resulting_moves = moves_id
         for i in preds:
             self._kb += i
         
@@ -49,9 +49,10 @@ class World(object):
             nextState = map(lambda a: Term('ptrue', a.args[0]) if a.args[0].functor != "thinks" else a.args[0],\
                 self.query([Term('next', Var('_'))], kb=copyKb).keys())
             potentialWorld = World(self._engine, self._baseModel, self._step + 1,\
-                seqProb*self._prob, set(nextState), self._player)
+                seqProb*self._prob, set(nextState), self._player,None,)
             successorWorlds.append(potentialWorld)
         return set(successorWorlds)
+
     #Assumption is that this world is discarded after this function is called
     #If simulation is called
     def getSuccessorWorlds(self, takenMoves):
@@ -68,30 +69,37 @@ class World(object):
                 potentialMovesByOthers[i] = self.query(\
                     [Term('thinks_move', self._player, \
                         Term('does', i, Var('_')))], kb=tempKb)
-        
         potentialMoveSequences = \
             self._processMoveSequences(\
                 itertools.product(*[[(key, val) for (key, val) in potentialMovesByOthers[key].items()] \
                     for key in potentialMovesByOthers.keys()]))
 
-        tokens = set(self.query([Term('sees', self._player, Var('_'))], kb=tempKb).keys())
-        successorWorlds = []
+        tkquery = self.query([Term('sees', self._player, Var('_'))], kb=tempKb).keys()
+        tokens = list(map(lambda a: str(a.args[1]),tkquery)) 
+        tokens.sort()
+        tkkey = "".join(tokens)
+        worlds = {}
         for moves, seqProb in potentialMoveSequences:
             copyKb = tempKb.extend()
             for m in moves:
                 copyKb += m
             potentialTokens = set(map(lambda a: a.args[1], self.query([Term('thinks', self._player, \
                 Term('sees', self._player, Var('_')))],kb=copyKb).keys()))
-            if (tokens != potentialTokens):
-                continue
+        
             nextState = map(lambda a: Term('ptrue', a.args[0]) if a.args[0].functor != "thinks" else a.args[0],\
                 self.query([Term('next', Var('_'))], kb=copyKb).keys())
-
+            move_id = list(map(lambda a: str(a.args[1]),moves))
+            move_id.sort()
+            move_id = "".join(move_id)
+            ptklist = list(map(lambda a: str(a.args[1]),potentialTokens))
+            ptklist.sort()
+            ptkkey = "".join(ptklist)
             potentialWorld = World(self._engine, self._baseModel, self._step + 1,\
-                seqProb*self._prob, set(nextState), self._player, tokens)
-            successorWorlds.append(potentialWorld)
-
-        return set(successorWorlds)
+                seqProb*self._prob, set(nextState), self._player, ptkkey, move_id)
+            if ptkkey not in worlds.keys():
+                worlds[ptkkey] = []
+            worlds[ptkkey].append(potentialWorld)
+        return (worlds, tkkey)
 
     # Extract the action out of the knowledge predicate and cumulatively multiply action probabilities to get total sequence probability
     def _processMoveSequences(self, moveSequences):

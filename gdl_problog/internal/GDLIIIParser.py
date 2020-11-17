@@ -88,12 +88,14 @@ class GDLTerm(GDLMetaObject):
         else:
             return str(self.pred)
     def generate_thinks(self, excluded_predicates = set()) -> GDLMetaObject:
+        if str(self.pred) == "distinct" or str(self.pred) == "role":
+            return self
         #Assumption, ptrue and next only have one argument
         if str(self.pred) == 'ptrue':
             return GDLTerm('thinks', 'R', self.args[0])
         elif str(self.pred) == "knows":
             #Taking into account knows/1 and knows/2
-            return GDLTerm('thinks', 'R', self.args[0 if len(self) == 1 else 1])
+            return GDLTerm("thinks", "R", self)
         elif str(self.pred) == 'next' or str(self.pred) == "not":
             return GDLTerm(self.pred, self.args[0].generate_thinks(excluded_predicates))
         elif str(self.pred) not in excluded_predicates:
@@ -270,7 +272,6 @@ class GDLIIIParser(object):
         program = "".join(open(program_file).readlines()).replace("\n","")
         gdl_spec = process_func(program)
         gdl_spec._finalise_model(self._existing_builtins, self._populate_predefined_preds())
-        print(gdl_spec)
         return gdl_spec
 
     def _infix_rule_rhs_split(self, gdl) -> [GDLMetaObject]:

@@ -9,6 +9,8 @@ from internal.world import World
 from internal.randomWorld import RandomWorld
 from internal.GDLIIIParser import GDLIIIParser, File_Format
 
+NO_SEEN_TOKENS_KEY = '-2'
+
 class GameData(object):
     def __init__(self, players, random_id):
         self.players = players
@@ -40,7 +42,7 @@ class GDLNode(object):
             worlds = self.worlds
         initialResults = []
         #Assumption: Sum of all probabilities of worlds == 1
-        for world in self.worlds[player]:
+        for world in worlds[player]:
             initialResults.append(world.query([query]))
         keys = set([i for d in initialResults for i in d.keys()])
         queryResults = {}
@@ -57,7 +59,7 @@ class GDLNode(object):
     def _generate_legal_moves(self):
         legalMoves = {}
         for player in self.worlds.keys():
-            legalMoves[player] = set()
+            legalMoves[player] = {}
             for world in self.worlds[player]:
                 legalMoves[player] = world.query([Term('legal', player, Var('_'))])
                 break
@@ -69,12 +71,15 @@ class GDLNode(object):
         total_new_worlds = {}
         newWorlds = set()
         for world in self.worlds[player]:
-            newWorlds = newWorlds.union(world.get_speculative_worlds(actions))
+            (wd, truekey) = world.getSuccessorWorlds(actions)
+            newWorlds = newWorlds.union(wd[truekey])
         total_new_worlds[player] = self._normaliseProbability(newWorlds)
         #Find knowledge that is known across every state, this will derive the knows predicate
         res = [k for (k,v) in self.raw_query(player, Term('thinks', player, Var('_')), total_new_worlds).items() if v == 1]
         for p in res:
-            knowsSet.add(Term('knows', p.args[0], p.args[1]))
+            t = Term('knows', p.args[0], p.args[1])
+            knowsSet.add(t)
+            knowsSet.add(Term('thinks', player, t))
         for w in total_new_worlds[player]:
             for p in knowsSet:
                 w._preds.add(p)
@@ -82,28 +87,30 @@ class GDLNode(object):
         return GDLNode(total_new_worlds, self.game_data, self)
 
     def _generate_successor_worlds(self, actions):
-        knowsSet = set()
         total_new_worlds = {}
-        for i in [_ for _ in self.game_data.players if _ != self.game_data.random_id]:
+        players_less_random = [_ for _ in self.game_data.players if _ != self.game_data.random_id]
+        for i in players_less_random:
+            knowsSet = set()
             newWorlds = set()
             for world in self.worlds[i]:
-                newWorlds = newWorlds.union(world.getSuccessorWorlds(actions))
+                (wd, truekey) = world.getSuccessorWorlds(actions)
+                newWorlds = newWorlds.union(wd[truekey])
             total_new_worlds[i] = self._normaliseProbability(newWorlds)
             #Find knowledge that is known across every state, this will derive the knows predicate
             res = [k for (k,v) in self.raw_query(i, Term('thinks', i, Var('_')), total_new_worlds).items() if v == 1]
             for p in res:
-                knowsSet.add(Term('knows', p.args[0], p.args[1]))      
+                t = Term('knows', p.args[0], p.args[1])
+                knowsSet.add(t)
+                knowsSet.add(Term('thinks', i, t))
+            for w in total_new_worlds[i]:
+                for p in knowsSet:
+                    w._preds.add(p)
+                    w._kb += p
         
         #Extra case, should only be one world in the random players collection
         if self.game_data.random_id in self.worlds.keys():
             for w in self.worlds[self.game_data.random_id]:
                 total_new_worlds[self.game_data.random_id] = set(w.getSuccessorWorlds(actions))
-
-        for i in self.game_data.players:
-            for w in total_new_worlds[i]:
-                for p in knowsSet:
-                    w._preds.add(p)
-                    w._kb += p
         return GDLNode(total_new_worlds, self.game_data, self)
 
     def _normaliseProbability(self,worlds):
@@ -189,13 +196,15 @@ class GDLIIIProblogRep(object):
             set(map(lambda a: Term('ptrue', a[0].args[0]), self._engine.ground_all(self._kb, queries=[Term('init',Var('_'))]).get_names()))
         players = \
             set(map(lambda a: a[0], self._engine.ground_all(self._kb, queries=[Term('role',Var('_'))]).get_names()))
-        self._step = [i.args[0].args[0].value for i in initialState if i.args[0].functor == 'step'][0]
+        #Not needed, but dont care to remove right now
+        self._step = 0
         playerWorldState = {}
-
+        playerPreds = initialState
+        for playerNum in map(lambda a: a.args[0], players):
+            knowledge = map(lambda a: Term('thinks', playerNum, a.args[0]), initialState)
+            playerPreds = playerPreds.union(set(knowledge))
         for playerNum in map(lambda a: a.args[0], players):
             self._playerList.append(playerNum)
-            knowledge = map(lambda a: Term('thinks', playerNum, a.args[0]), initialState)
-            playerPreds = initialState.union(set(knowledge))
             #Each player starts with a single initial world
             if playerNum == self._randomIdentifier:
                 #Random Specific world has no thinks predicates

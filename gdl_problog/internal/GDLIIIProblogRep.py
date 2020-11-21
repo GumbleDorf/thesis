@@ -89,28 +89,84 @@ class GDLNode(object):
     def _generate_successor_worlds(self, actions):
         total_new_worlds = {}
         players_less_random = [_ for _ in self.game_data.players if _ != self.game_data.random_id]
+        all_worlds = {}
+        knowsSet = set()
         for i in players_less_random:
-            knowsSet = set()
+            all_worlds[i] = {}
             newWorlds = set()
+            truekey = None
             for world in self.worlds[i]:
-                (wd, truekey) = world.getSuccessorWorlds(actions)
-                newWorlds = newWorlds.union(wd[truekey])
+                (wd,truekey) = world.getSuccessorWorlds(actions)
+                try:
+                    newWorlds = newWorlds.union(wd[truekey])
+                except:
+                    pass
+                for m in wd.keys():
+                    if m not in all_worlds[i].keys():
+                        all_worlds[i][m] = set()
+                    all_worlds[i][m] = all_worlds[i][m].union(wd[m])
             total_new_worlds[i] = self._normaliseProbability(newWorlds)
             #Find knowledge that is known across every state, this will derive the knows predicate
-            res = [k for (k,v) in self.raw_query(i, Term('thinks', i, Var('_')), total_new_worlds).items() if v == 1]
+            res = [k for (k,v) in self.raw_query(i, Term('thinks', i, Var('_')), total_new_worlds).items() if v == 1 and k.args[1].functor != "legal"]
             for p in res:
                 t = Term('knows', p.args[0], p.args[1])
                 knowsSet.add(t)
-                knowsSet.add(Term('thinks', i, t))
+            for w in total_new_worlds[i]:
+                for p in knowsSet:
+                    w._preds.add(Term('thinks', i, p))
+                    w._kb += Term('thinks', i, p)
+        
+        for i in players_less_random:
             for w in total_new_worlds[i]:
                 for p in knowsSet:
                     w._preds.add(p)
                     w._kb += p
-        
+
+        for i in players_less_random:
+            #Get knowledge in every other state
+            for m in all_worlds[i].keys():
+                if m != truekey:
+                    knows = self.get_knows_for_worlds(all_worlds[i][m])
+                    for p in knows:
+                        for wm in all_worlds[i][m]:
+                            wm._preds.add(Term('knows', i,p))
+
+
+        #Generate Inferred knowledge
+        kvworlds = {}
+        for i in players_less_random:
+            for w in total_new_worlds[i]:
+                kvworlds[w] = [Term('thinks',i,p) for p in self.generate_inferred_knowledge(w,all_worlds)]
+
+        for (w,k) in kvworlds.items():
+            for p in k:
+                w._preds.add(p)
+                w._kb += p
+        knowsSet2 = set()
+        #Generate new legal moves
+        for i in players_less_random:
+            res = [k for (k,v) in self.raw_query(i, Term('thinks', i, Var('_')), total_new_worlds).items() if v == 1 and k.args[1].functor == "legal"]
+            for q in res:
+                knowsSet2.add(Term('knows', i, q.args[1]))
+        for i in players_less_random:
+            for w in total_new_worlds[i]:
+                for p in knowsSet2:
+                    w._preds.add(p)
+                    w._kb += Term(p)
+
+
         #Extra case, should only be one world in the random players collection
         if self.game_data.random_id in self.worlds.keys():
             for w in self.worlds[self.game_data.random_id]:
                 total_new_worlds[self.game_data.random_id] = set(w.getSuccessorWorlds(actions))
+                for w1 in total_new_worlds[self.game_data.random_id]:
+                    for p1 in knowsSet:
+                        w1._preds.add(p1)
+                        w1._kb += p1
+                    for p2 in knowsSet2:
+                        w1._preds.add(p2)
+                        w1._kb += p2
+                break
         return GDLNode(total_new_worlds, self.game_data, self)
 
     def _normaliseProbability(self,worlds):
@@ -120,6 +176,43 @@ class GDLNode(object):
         for w in worlds:
             w._prob = w._prob / totalprob
         return worlds
+    
+    def generate_inferred_knowledge(self,world,all_worlds):
+        for i in all_worlds.keys():
+            if i == world._player:
+                continue
+            for j in all_worlds[i].keys():
+                same_token = None
+                for w in all_worlds[i][j]:
+                    if same_token is None and self.state(w) == self.state(world):
+                        same_token = j
+                        preds = set([p for p in w._preds if p.functor == "knows" and p.args[0] == i and p.args[1].functor != "legal"])
+                        return preds
+        return set()
+
+    def state(self, world):
+        ppreds = set()
+        for p in world._preds:
+            if p.functor == "thinks" and p.args[0] == world._player and p.args[1].functor != "knows":
+                ppreds.add(p.args[1])
+        return ppreds
+
+    def get_knows_for_worlds(self, worlds):
+        preds = set()
+        for w in worlds:
+            dis_set = set()
+            for p in w.query([Term('thinks', w._player, Var('_'))],prob_override=1):
+                if p.functor == "thinks":
+                    tp = p.args[1]
+                    if tp.functor != "knows":
+                        dis_set.add(tp)
+            
+            if len(preds) == 0:
+                preds = dis_set
+            else:
+                preds &= dis_set
+        return preds
+
 
 #This is just a preliminary program to solve Monty Hall, not generalised yet.
 class GDLIIIProblogRep(object):
@@ -199,11 +292,10 @@ class GDLIIIProblogRep(object):
         #Not needed, but dont care to remove right now
         self._step = 0
         playerWorldState = {}
-        playerPreds = initialState
+
         for playerNum in map(lambda a: a.args[0], players):
             knowledge = map(lambda a: Term('thinks', playerNum, a.args[0]), initialState)
-            playerPreds = playerPreds.union(set(knowledge))
-        for playerNum in map(lambda a: a.args[0], players):
+            playerPreds = initialState.union(set(knowledge))
             self._playerList.append(playerNum)
             #Each player starts with a single initial world
             if playerNum == self._randomIdentifier:
@@ -211,15 +303,15 @@ class GDLIIIProblogRep(object):
                 playerWorldState[playerNum] = [RandomWorld(self._engine, self._baseModelFile, self._step, 1, initialState, playerNum)]
             else:
                 playerWorldState[playerNum] = [World(self._engine, self._baseModelFile, self._step, 1, playerPreds, playerNum)]
-
         return playerWorldState
 
     def applyActionsToModelAndUpdate(self):
         if (None in self._moveList.values()):
-            raise "Error: Must have submitted moves for all players before proceeding"
+            raise Exception("Error: Must have submitted moves for all players before proceeding")
         self._cur_node = self._cur_node.get_next_node(self._moveList)
+        #Assume, there is at least one player
         if len([(k,v) for (k,v) in self._cur_node.raw_query(\
-             self._randomIdentifier, Term('terminal')).items() if v > 0]) > 0:
+             self._playerList[0], Term('terminal')).items() if v > 0]) > 0:
             self.terminal = True
 
         self._step += 1

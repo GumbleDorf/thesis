@@ -73,7 +73,6 @@ class World(object):
             self._processMoveSequences(\
                 itertools.product(*[[(key, val) for (key, val) in potentialMovesByOthers[key].items()] \
                     for key in potentialMovesByOthers.keys()]))
-
         tkquery = self.query([Term('sees', self._player, Var('_'))], kb=tempKb).keys()
         tokens = list(map(lambda a: str(a.args[1]),tkquery)) 
         tokens.sort()
@@ -85,7 +84,12 @@ class World(object):
                 copyKb += m
             potentialTokens = set(map(lambda a: a.args[1], self.query([Term('thinks', self._player, \
                 Term('sees', self._player, Var('_')))],kb=copyKb).keys()))
-        
+            move_id = list(map(lambda a: str(a.args[1]),moves))
+            move_id.sort()
+            move_id = "".join(move_id)
+            ptklist = list(map(lambda a: str(a.args[1]),potentialTokens))
+            ptklist.sort()
+            ptkkey = "".join(ptklist)
             nextState = map(lambda a: Term('ptrue', a.args[0]) if a.args[0].functor != "thinks" else a.args[0],\
                 self.query([Term('next', Var('_'))], kb=copyKb).keys())
             move_id = list(map(lambda a: str(a.args[1]),moves))
@@ -97,8 +101,9 @@ class World(object):
             potentialWorld = World(self._engine, self._baseModel, self._step + 1,\
                 seqProb*self._prob, set(nextState), self._player, ptkkey, move_id)
             if ptkkey not in worlds.keys():
-                worlds[ptkkey] = []
-            worlds[ptkkey].append(potentialWorld)
+                worlds[ptkkey] = set()
+            worlds[ptkkey].add(potentialWorld)
+
         return (worlds, tkkey)
 
     # Extract the action out of the knowledge predicate and cumulatively multiply action probabilities to get total sequence probability

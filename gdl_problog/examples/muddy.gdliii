@@ -1,0 +1,28 @@
+(role ann) 
+(role bob)  
+(role random)
+
+(init(round 0))
+
+(yesno 0) (yesno 1) (yes 1)
+(<= (legal random (muddy ?a ?b)) (true (round 0)) (yesno ?a) (yesno ?b) (or (yes ?a) (yes ?b)))
+
+(<= (legal ?c noop) (role ?c) (distinct ?c random) (true(round 0)))
+(<= (legal random noop) (not (true (round 0))))
+(<= (true(has ann mud)) (does random (muddy 1 ?b)))
+(<= (true(has bob mud)) (does random (muddy ?a 1)))
+
+(<= (next(has ?c mud)) (true(has ?c mud)))
+
+(<= (next (round 1)) (true (round 0)))
+(<= (next (round 2)) (true (round 1)))
+(<= (next (round 3)) (true (round 2)))
+
+(<= (sees ?c (dirt ?d)) (true(has ?d mud)) (distinct ?c ?d))
+(<= (isMuddy ?c) (true(has ?c mud)))
+(<= (legal ?c (say yes)) (role ?c) (distinct ?c random) (knows ?c (isMuddy ?c)) (not (true (round 0))))
+(<= (legal ?c (say no)) (role ?c) (distinct ?c random) (not(knows ?c (isMuddy ?c))) (not (true (round 0))))
+(<= (sees ?c (said ?d ?x)) (does ?d (say ?x)))
+
+(<= (terminal) (role ?c) (does ?c (say yes)))
+(<= (terminal) (true (round 3)))

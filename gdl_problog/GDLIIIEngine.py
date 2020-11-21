@@ -7,8 +7,6 @@ class GDLIIIEngine(object):
     def __init__(self, file_name, fformat):
         self._cur_step = 0
         self._gdl_rep = GDLIIIProblogRep(file_name, fformat)
-        w = open('./tt.txt', 'w+')
-        w.write(str(self._gdl_rep._model))
         self._player_map = self._gdl_rep._model.player_map
         self.player_names = list(self._player_map.keys())
     #Must be called when inserting player name into a query clause

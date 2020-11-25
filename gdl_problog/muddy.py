@@ -8,27 +8,18 @@ PLAYER_NAME = 'candidate'
 
 def main():
     mod = GDLIIIEngine('./examples/muddy.gdliii', File_Format.PREFIX)
-    moves = mod.get_legal_moves()
-    print(moves)
-    #all noops for players
-    mod.set_actions({'ann': moves['ann'][0], \
-        'bob':moves['bob'][0],\
-        'random':moves['random'][0]})
-    mod.update_step()
-    moves = mod.get_legal_moves()
-    print(mod.get_legal_moves())
-    mod.set_actions({'ann': moves['ann'][0], \
-        'bob':moves['bob'][0],\
-        'random':moves['random'][0]})
-    mod.update_step()
-    moves = mod.get_legal_moves()
-    print(mod.get_legal_moves())
-    mod.set_actions({'ann': moves['ann'][0], \
-        'bob':moves['bob'][0],\
-        'random':moves['random'][0]})
-    mod.update_step()
-    print(mod.get_legal_moves())
-
+    step = 0
+    while not mod.is_terminal():
+        moves = mod.get_legal_moves()
+        rmove = choice(moves['random'])
+        #all noops for players
+        mov = {'ann': moves['ann'][0], \
+            'bob':moves['bob'][0],\
+            'random':rmove}
+        print(f"Step {step}: {mov}")
+        mod.set_actions(mov)
+        mod.update_step()
+        step += 1
 
 if __name__ == "__main__":
     main()
